@@ -1,3 +1,15 @@
+> **This is Open Meridian's fork of [FINOS Workspace](https://github.com/finos-labs/finos-workspace)**, showing FINOS Workspace working with
+> [Open Meridian](https://open-meridian.dev). Our changes are on this branch (`open-meridian`); the `main`
+> branch tracks upstream unchanged.
+>
+> FINOS Workspace's front end, with its back end replaced by Open Meridian's data reads and access controls.
+>
+> **Status:** the integration isn't built yet. When it is, this section says how to run it locally against an Open
+> Meridian deployment. It isn't listed in Open Meridian's plugin registry.
+>
+> FINOS Workspace is licensed under Apache-2.0; this fork keeps that licence and its notices. It is not affiliated with or
+> endorsed by FINOS or the Linux Foundation.
+
 [![badge-labs](https://user-images.githubusercontent.com/327285/230928932-7c75f8ed-e57b-41db-9fb7-a292a13a1e58.svg)](https://community.finos.org/docs/governance/lifecycle-stages/labs)
 
 <h1 align="center">
