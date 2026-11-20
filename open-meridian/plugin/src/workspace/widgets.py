@@ -221,7 +221,7 @@ async def dataset_ages(lake: Lake, query: dict[str, str]) -> tuple[int, str, byt
     if query.get("raw") == "true":
         return _json(rows)
     if not rows:
-        return _html(_empty(theme, "No dataset is licensed to this workspace yet."))
+        return _html(_empty(theme, "This workspace is not entitled to any dataset yet."))
     shown = [
         {
             **row,

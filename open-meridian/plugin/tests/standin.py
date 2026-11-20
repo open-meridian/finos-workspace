@@ -33,9 +33,15 @@ class Sidecar(Recorder):
     identity = meridian.Identity("workspace", roles=("reporting",))
     grants = meridian.Grants()
 
-    def __init__(self, entitled: bool = True, alive_ns: int = DAY_NS) -> None:
+    def __init__(
+        self, entitled: bool = True, alive_ns: int = DAY_NS, listed: bool = True
+    ) -> None:
         super().__init__("workspace")
         self.entitled = entitled
+        #: Whether ListDatasets names the dataset at all. A deployment's
+        #: sidecar names only what the plugin is entitled to: with the one
+        #: entitlement withdrawn, it names none.
+        self.listed = listed
         self.alive_ns = alive_ns
         self.read: list[str] = []
 
@@ -45,6 +51,8 @@ class Sidecar(Recorder):
     async def _operate(self, method: Any, params: Any) -> Any:
         self.read.append(cast(str, method))
         if method == "ListDatasets":
+            if not self.listed:
+                return ops.ListDatasetsResult()
             return ops.ListDatasetsResult(
                 datasets=[
                     ops.DatasetRef(

@@ -137,7 +137,12 @@ class Lake(reporting.Role):
         if allowed & set(names):
             return ""
         if not names:
-            return "No dataset is licensed to this plugin yet."
+            # The sidecar lists only what the plugin is entitled to, so an
+            # entitlement withdrawn and a dataset never licensed read the same.
+            return (
+                "This plugin is not entitled to any dataset: a deployment admin "
+                "licenses one and entitles this plugin to it on Data sources."
+            )
         return (
             "This plugin is not entitled to "
             + ", ".join(sorted(names))

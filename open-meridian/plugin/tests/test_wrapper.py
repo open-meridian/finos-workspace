@@ -196,6 +196,19 @@ def test_with_the_entitlement_withdrawn_each_widget_shows_the_refusal_not_an_emp
     assert "Not entitled" in widget(c, "dataset_ages").text
 
 
+def test_with_no_dataset_listed_the_rates_show_the_refusal_as_a_deployment_answers() -> None:
+    # A deployment's sidecar lists only the datasets the plugin is entitled
+    # to: with the one entitlement withdrawn, none, licensed or not.
+    c, _ = client(Sidecar(entitled=False, listed=False))
+    for name in ("fx_rates_table", "fx_rates_chart"):
+        page = widget(c, name).text
+        assert "data-refused" in page and "not entitled to any dataset" in page
+        assert "licensed to this" not in page and "<table" not in page
+    assert widget(c, "fx_rates_table", "&raw=true").status == 403
+    ages = widget(c, "dataset_ages").text
+    assert "not entitled to any dataset" in ages and "<table" not in ages
+
+
 def test_the_data_age_widget_is_filled() -> None:
     c, _ = client()
     rows = json.loads(widget(c, "dataset_ages", "&raw=true").body)
