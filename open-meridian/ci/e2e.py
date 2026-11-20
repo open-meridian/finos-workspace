@@ -219,21 +219,32 @@ def open_workspace(page: Page) -> None:
     app.get_by_text("FX reference rates", exact=True).first.click(timeout=60_000)
 
 
-def widget_text(page: Page, marker: str) -> str:
+def widget_texts(page: Page, marker: str) -> list[str]:
+    """The words of each frame naming `marker`, in any case: a widget's
+    headings are drawn in capitals, and inner text is as drawn."""
+    found = []
     for frame in page.frames:
         try:
             text = frame.inner_text("body", timeout=1000)
         except Exception:
             continue
-        if marker in text:
-            return text
-    return ""
+        if marker.lower() in text.lower():
+            found.append(text)
+    return found
+
+
+def widget_text(page: Page, marker: str) -> str:
+    return next(iter(widget_texts(page, marker)), "")
 
 
 def rates_row(page: Page) -> str:
-    text = widget_text(page, "Business date")
-    match = re.search(r"EUR/USD\s+([0-9.]+)\s+(\d{4}-\d\d-\d\d)\s+(\S+Z)\s+(\S+)", text)
-    return match.group(0) if match else ""
+    """The table's EUR/USD row; the chart names the business date too, and
+    has no row."""
+    for text in widget_texts(page, "Business date"):
+        match = re.search(r"EUR/USD\s+([0-9.]+)\s+(\d{4}-\d\d-\d\d)\s+(\S+Z)\s+(\S+)", text)
+        if match:
+            return match.group(0)
+    return ""
 
 
 def main() -> None:
@@ -318,8 +329,7 @@ def checks(browser, page: Page) -> None:
     def refused():
         open_workspace(page)
         page.wait_for_timeout(8000)
-        text = widget_text(page, "Refused")
-        return "not entitled" in text and text
+        return next((text for text in widget_texts(page, "Refused") if "not entitled" in text.lower()), "")
 
     said = until("the rates widget's refusal", 180, refused, every=5)
     page.screenshot(path=str(SHOTS / "refused.png"))
