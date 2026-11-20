@@ -149,6 +149,10 @@ jobs:
           for c in dashboard launcher conductor instrument plugin-ecb plugin-workspace; do
             kubectl -n meridian logs "deploy/meridian-meridian-runtime-$c" --all-containers --tail=400 >"$RUNNER_TEMP/kept/$c.log" 2>&1 || true
           done
+          # Each dashboard copy's own log: a request is answered by either.
+          for pod in $(kubectl -n meridian get pods -o name | grep -- '-dashboard-' | grep -v -- '-key-'); do
+            kubectl -n meridian logs "$pod" --all-containers --tail=600 >"$RUNNER_TEMP/kept/${pod##*/}.log" 2>&1 || true
+          done
           # Never person.json, person2.json, the kubeconfig or the CLI's sessions.
           cp "$RUN_DIR/meridian-up.log" "$RUN_DIR/platform.log" "$RUNNER_TEMP/kept/" 2>/dev/null || true
           cp -R "$RUN_DIR/shots" "$RUNNER_TEMP/kept/" 2>/dev/null || true
