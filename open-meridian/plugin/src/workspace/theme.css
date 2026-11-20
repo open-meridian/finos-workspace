@@ -1,0 +1,20 @@
+/* Workspace's look from Open Meridian's UI kit (WL_STYLESHEET): the kit's
+ * colour scheme, served by the dashboard on the plugin's own host, and
+ * Workspace's accent, status and type mapped onto the kit's tokens. The kit
+ * follows the person's light or dark mode; Workspace's surfaces stay its own. */
+@import url("/.meridian/ui/0.16.0/schemes/default.css");
+
+:root {
+  --color-main-50: var(--accent);
+  --color-main-100: var(--primary);
+  --color-main-200: var(--primary);
+  --color-main-contrast: var(--primary-ink);
+  --color-error-100: var(--danger);
+  --color-success-100: var(--good);
+  --color-warning-100: var(--warn-ink);
+  --color-informative-100: var(--accent);
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}

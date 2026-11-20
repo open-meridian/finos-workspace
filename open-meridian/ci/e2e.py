@@ -1,0 +1,235 @@
+"""The workspace on a real deployment, in a headless browser.
+
+As the deployment admin (`pat`, first_run.py), at the dashboard's own pages:
+grants pat View on the workspace (a user group, an access group, a
+permission on all accounts); licenses `ecb:ecb_fx` and entitles the
+workspace to it. Then, as pat, through the dashboard:
+
+1. the starter dashboard shows the latest EUR/USD with its time;
+2. the data-age widget is filled;
+3. the instrument lookup finds EUR/USD in the master;
+4. every request the workspace's frames make is to the plugin's own origin;
+5. Workspace's own UI, framed at 375, 582 and 1280 wide, does not scroll
+   sideways (screenshots kept);
+6. sam, who holds no level on the plugin, is refused its page;
+7. with the entitlement withdrawn, the rates widget shows the refusal.
+
+Never prints a password. Usage: python3 e2e.py RUN_DIR
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+import time
+from pathlib import Path
+
+from playwright.sync_api import Page, sync_playwright
+
+DASHBOARD = "http://meridian.localhost"
+INSTANCE = "workspace"
+PLUGIN = f"http://{INSTANCE}.plugins.meridian.localhost"
+DATASET = "ecb:ecb_fx"
+RUN = Path(sys.argv[1])
+SHOTS = RUN / "shots"
+
+
+def say(text: str) -> None:
+    print(f"e2e: {text}", flush=True)
+
+
+def until(what: str, seconds: float, check, every: float = 3.0):
+    start = time.time()
+    while time.time() - start < seconds:
+        found = check()
+        if found:
+            say(f"{what} after {round(time.time() - start)}s")
+            return found
+        time.sleep(every)
+    raise SystemExit(f"e2e: {what} never happened in {seconds}s")
+
+
+def sign_in(page: Page, person_file: str) -> None:
+    person = json.loads((RUN / person_file).read_text())
+    page.goto(f"{DASHBOARD}/sign-in")
+    page.fill("#name", person["name"])
+    page.fill("#password", person["password"])
+    with page.expect_navigation():
+        page.click("button[type=submit]")
+
+
+def token(page: Page, path: str) -> str:
+    page.goto(f"{DASHBOARD}{path}")
+    return page.get_attribute("input[name=form_token]", "value", timeout=30_000) or ""
+
+
+def post(page: Page, path: str, fields: dict[str, str], what: str) -> None:
+    answer = page.request.post(f"{DASHBOARD}{path}", form=fields, max_redirects=0)
+    if answer.status not in (200, 302, 303):
+        said = re.sub(r"<[^>]+>", " ", answer.text())
+        raise SystemExit(f"e2e: {what} answered {answer.status}: {' '.join(said.split())[:400]}")
+    say(f"{what}: {answer.status}")
+
+
+def option(page: Page, select: str, name: str) -> str:
+    page.goto(f"{DASHBOARD}/admin")
+    values = page.eval_on_selector_all(
+        f"select[name={select}] option",
+        "(options, name) => options.filter(o => o.textContent.trim() === name).map(o => o.value)",
+        name,
+    )
+    if not values:
+        raise SystemExit(f"e2e: no {select} named {name!r} on the admin page")
+    return values[0]
+
+
+def grant_view(page: Page) -> None:
+    form = token(page, "/admin")
+    post(page, "/admin/user-groups", {"form_token": form, "name": "Workspace readers", "login": "local|pat"},
+         "a user group of pat")
+    post(page, "/admin/access-groups",
+         {"form_token": form, "name": "Workspace view", "entries": f"{INSTANCE} reporting read"},
+         "an access group, View on the workspace")
+    post(page, "/admin/permissions", {
+        "form_token": form,
+        "user_group_id": option(page, "user_group_id", "Workspace readers"),
+        "account_group_id": "all-accounts",
+        "access_group_id": option(page, "access_group_id", "Workspace view"),
+    }, "the permission")
+
+
+def license_and_entitle(page: Page) -> None:
+    def listed():
+        page.goto(f"{DASHBOARD}/admin/data-sources")
+        return DATASET in page.content()
+
+    until(f"{DATASET} listed on Data sources", 600, listed, every=10)
+    form = token(page, "/admin/data-sources")
+    post(page, "/admin/data-sources/licence", {
+        "form_token": form, "dataset": DATASET, "kept": "1", "retention_days": "0",
+        "display": "1", "derived_use": "1", "note": "The workspace's CI run",
+    }, f"the licence of {DATASET}")
+    entitle(page, allowed=True)
+
+
+def entitle(page: Page, allowed: bool) -> None:
+    form = token(page, "/admin/data-sources")
+    fields = {"form_token": form, "dataset": DATASET, "instance": INSTANCE, "note": "The workspace's CI run"}
+    if allowed:
+        fields["allowed"] = "1"
+    post(page, "/admin/data-sources/entitlement", fields,
+         f"{'the entitlement' if allowed else 'the entitlement withdrawn'}: {INSTANCE} to {DATASET}")
+
+
+def open_workspace(page: Page) -> None:
+    """The workspace's area at View, its front end framed, the starter
+    dashboard opened from its Apps page."""
+
+    def shown():
+        page.goto(f"{DASHBOARD}/plugins/{INSTANCE}?level=read")
+        return page.query_selector("iframe[data-plugin-frame]")
+
+    until("the workspace's page shown in its area", 180, shown)
+    app = until("Workspace's Apps page", 120, lambda: next(
+        (f for f in page.frames if f.url.startswith(PLUGIN) and "/app" in f.url), None), every=2)
+    app.get_by_text("FX reference rates", exact=True).first.click(timeout=60_000)
+
+
+def widget_text(page: Page, marker: str) -> str:
+    for frame in page.frames:
+        try:
+            text = frame.inner_text("body", timeout=1000)
+        except Exception:
+            continue
+        if marker in text:
+            return text
+    return ""
+
+
+def rates_row(page: Page) -> str:
+    text = widget_text(page, "Business date")
+    match = re.search(r"EUR/USD\s+([0-9.]+)\s+(\d{4}-\d\d-\d\d)\s+(\S+Z)\s+(\S+)", text)
+    return match.group(0) if match else ""
+
+
+def main() -> None:
+    SHOTS.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        admin = browser.new_context(viewport={"width": 1280, "height": 900})
+        page = admin.new_page()
+        sign_in(page, "person.json")
+        grant_view(page)
+        license_and_entitle(page)
+
+        asked: list[tuple[str, str]] = []
+        page.on("request", lambda r: asked.append((r.frame.url if r.frame else "", r.url)))
+        open_workspace(page)
+
+        # 1. EUR/USD with its time, from the lake; reloaded until the ECB's
+        # rates have reached it.
+        def eur_usd():
+            page.wait_for_timeout(8000)
+            row = rates_row(page)
+            if not row:
+                open_workspace(page)
+            return row
+
+        say(f"the rates widget: {until('EUR/USD with its time', 900, eur_usd, every=15)}")
+        # 2. The data age.
+        ages = until("the data-age widget filled", 120, lambda: DATASET in widget_text(page, "Last heard")
+                     and widget_text(page, "Last heard"))
+        say(f"the data-age widget: {' '.join(ages.split())[:200]}")
+        # 3. The lookup.
+        lookup = until("the lookup's EUR/USD", 120, lambda: (t := widget_text(page, "Identifiers"))
+                       and "iso4217:EUR" in t and "iso4217:USD" in t and t)
+        say(f"the lookup: {' '.join(lookup.split())[:200]}")
+
+        # 4. No route out.
+        out = sorted({url for frame, url in asked
+                      if frame.startswith(PLUGIN) and not url.startswith((PLUGIN, "data:", "blob:"))})
+        if out:
+            raise SystemExit(f"e2e: the workspace's frames asked other origins: {out}")
+        mine = sum(1 for frame, _ in asked if frame.startswith(PLUGIN))
+        say(f"the workspace's frames made {mine} requests, every one to {PLUGIN}")
+
+        # 5. Workspace's own UI at each width, framed by the dashboard.
+        for width in (375, 582, 1280):
+            page.set_viewport_size({"width": width, "height": 900})
+            page.wait_for_timeout(3000)
+            app = next(f for f in page.frames if f.url.startswith(PLUGIN))
+            wide, room = app.evaluate("[document.documentElement.scrollWidth, document.documentElement.clientWidth]")
+            page.screenshot(path=str(SHOTS / f"workspace-{width}.png"))
+            if wide > room:
+                raise SystemExit(f"e2e: Workspace's UI scrolls sideways at {width}: {wide}px in {room}px")
+            say(f"at {width} wide: {wide}px in {room}px, no sideways scroll")
+
+        # 6. Somebody holding no level is refused.
+        other = browser.new_context().new_page()
+        sign_in(other, "person2.json")
+        answer = other.goto(f"{DASHBOARD}/plugins/{INSTANCE}?level=read")
+        if other.query_selector("iframe[data-plugin-frame]") or (answer and answer.status < 400):
+            raise SystemExit(f"e2e: sam was not refused the workspace ({answer.status if answer else 'no answer'})")
+        said = " ".join(other.inner_text("body").split())[:160]
+        say(f"sam, holding no level, refused: {answer.status} {said}")
+
+        # 7. The entitlement withdrawn: the refusal, not an empty table.
+        entitle(page, allowed=False)
+        page.set_viewport_size({"width": 1280, "height": 900})
+
+        def refused():
+            open_workspace(page)
+            page.wait_for_timeout(8000)
+            text = widget_text(page, "Refused")
+            return "not entitled" in text and text
+
+        said = until("the rates widget's refusal", 180, refused, every=5)
+        page.screenshot(path=str(SHOTS / "refused.png"))
+        say(f"withdrawn: {' '.join(said.split())[:200]}")
+        browser.close()
+    say("every check held")
+
+
+if __name__ == "__main__":
+    main()

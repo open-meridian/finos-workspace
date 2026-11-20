@@ -1,0 +1,24 @@
+[
+  {
+    "name": "FX reference rates",
+    "description": "The latest FX reference rates in the lake, as a table and a chart, the age of each dataset this workspace reads, and a lookup in the deployment's master",
+    "img": "",
+    "img_dark": "",
+    "img_light": "",
+    "allowCustomization": true,
+    "tabs": {
+      "rates": {
+        "id": "rates",
+        "name": "Rates",
+        "layout": [
+          { "i": "fx_rates_table", "x": 0, "y": 0, "w": 20, "h": 14 },
+          { "i": "fx_rates_chart", "x": 20, "y": 0, "w": 20, "h": 14 },
+          { "i": "dataset_ages", "x": 0, "y": 14, "w": 20, "h": 10 },
+          { "i": "instrument_lookup", "x": 20, "y": 14, "w": 20, "h": 10 }
+        ]
+      }
+    },
+    "groups": [],
+    "prompts": []
+  }
+]

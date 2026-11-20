@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workspace"
+version = "0.1.0"
+description = "FINOS Workspace's front end on an Open Meridian deployment, its widgets reading the lake"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+# The SDK and nothing else, pinned exactly: the sidecar this runs beside
+# speaks one version of the contract. Re-pinned at contract 31.
+dependencies = ["open-meridian==0.37.1"]
+
+[project.scripts]
+workspace = "workspace.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+workspace = ["templates/*.html", "apps.json", "theme.css"]
+
+# What this plugin says about itself, which `meridian plugin upload` sends and
+# a deployment admin approves before it runs.
+[tool.meridian]
+# `reporting` alone in the first slice: it reads the lake and the master and
+# records nothing back.
+roles = ["reporting"]
+interface = true
+declaration = "workspace.declaration:DECLARATION"

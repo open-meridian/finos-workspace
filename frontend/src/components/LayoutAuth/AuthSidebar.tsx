@@ -69,12 +69,16 @@ const TABS_LINKS: Record<string, TabLinkProps[]> = {
       label: "Widgets",
       icon: "layout-top",
     },
-    {
-      id: "ai",
-      href: "/app/ai",
-      label: "AI",
-      icon: "stars-02",
-    },
+    ...(import.meta.env.VITE_OPEN_MERIDIAN === "true"
+      ? []
+      : [
+          {
+            id: "ai",
+            href: "/app/ai",
+            label: "AI",
+            icon: "stars-02",
+          },
+        ]),
   ],
 };
 
