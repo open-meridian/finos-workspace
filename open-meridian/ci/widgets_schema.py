@@ -21,7 +21,9 @@ DATABASE = ("from sqlalchemy", "from api", "from . import")
 source = "\n".join(
     line for line in MODULE.read_text().splitlines() if not line.startswith(DATABASE)
 )
-namespace = {"__file__": str(MODULE), "__name__": "widgets_schema"}
+# The names those lines bring in, for annotations an older Python evaluates.
+namespace = {"__file__": str(MODULE), "__name__": "widgets_schema", "AsyncSession": object}
+namespace.update(dict.fromkeys(("select", "models", "service", "PLUGIN_ENABLED", "VERSION_ACTIVE")))
 exec(compile(source, str(MODULE), "exec"), namespace)
 kit = namespace["_kit_digest"]()
 etag = hashlib.sha256(json.dumps({"kit": kit, "types": {}}, sort_keys=True).encode()).hexdigest()[:32]
