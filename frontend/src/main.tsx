@@ -27,31 +27,40 @@ import { useShallowThemeStore } from "./lib/state/theme";
 import { applyWhiteLabelMeta } from "./utils/colorUtils";
 import { loadStylesheet } from "./utils/stylesheet";
 
+// Open Meridian's build (VITE_OPEN_MERIDIAN=true) leaves out Workspace's own
+// sign-in, 2FA, password reset, admin area and AI library: the deployment
+// signs people in and holds their access, and the agent surface is off.
+const OPEN_MERIDIAN = import.meta.env.VITE_OPEN_MERIDIAN === "true";
+
 const LazyGoogleProvider = lazy(() => import("./providers/GoogleProviderWrapper"));
 
-const Setup2FA = lazy(() => import("./routes/2fa"));
+const Setup2FA = /* @__PURE__ */ lazy(() => import("./routes/2fa"));
 const AppsPage = lazy(() => import("./routes/Apps"));
 const AuthedAppNotFound = lazy(() => import("./routes/AuthedAppNotFound"));
-const AdminHome = lazy(() => import("./routes/admin"));
-const AdminEntities = lazy(() => import("./routes/admin/entities"));
-const AdminAccountSettings = lazy(() => import("./routes/admin/account"));
-const AdminApps = lazy(() => import("./routes/admin/apps"));
-const AdminGroups = lazy(() => import("./routes/admin/roles"));
+const AdminHome = /* @__PURE__ */ lazy(() => import("./routes/admin"));
+const AdminEntities = /* @__PURE__ */ lazy(() => import("./routes/admin/entities"));
+const AdminAccountSettings = /* @__PURE__ */ lazy(
+  () => import("./routes/admin/account"),
+);
+const AdminApps = /* @__PURE__ */ lazy(() => import("./routes/admin/apps"));
+const AdminGroups = /* @__PURE__ */ lazy(() => import("./routes/admin/roles"));
 
-const AdminThemeSettings = lazy(() => import("./routes/admin/themeSettings"));
-const AdminUsers = lazy(() => import("./routes/admin/users"));
-const AdminWidgets = lazy(() => import("./routes/admin/widgets"));
-const AILibrary = lazy(() => import("./routes/aiLibrary"));
+const AdminThemeSettings = /* @__PURE__ */ lazy(
+  () => import("./routes/admin/themeSettings"),
+);
+const AdminUsers = /* @__PURE__ */ lazy(() => import("./routes/admin/users"));
+const AdminWidgets = /* @__PURE__ */ lazy(() => import("./routes/admin/widgets"));
+const AILibrary = /* @__PURE__ */ lazy(() => import("./routes/aiLibrary"));
 const MenuHomePage = lazy(() => import("./routes/appHome"));
 const ConnectionsPage = lazy(() => import("./routes/Connections"));
 const HomePage = lazy(() => import("./routes/home"));
-const LoginPage = lazy(() => import("./routes/login"));
+const LoginPage = /* @__PURE__ */ lazy(() => import("./routes/login"));
 const DataConnectors = lazy(() => import("./routes/newDataConnectors"));
-const ResetPasswordPage = lazy(() => import("./routes/resetPassword"));
+const ResetPasswordPage = /* @__PURE__ */ lazy(() => import("./routes/resetPassword"));
 const Settings = lazy(() => import("./routes/settings"));
 const TabPage = lazy(() => import("./routes/tab"));
 
-const LayoutAdmin = lazy(() => import("./components/LayoutAdmin"));
+const LayoutAdmin = /* @__PURE__ */ lazy(() => import("./components/LayoutAdmin"));
 const LayoutUnauth = lazy(() => import("./components/LayoutUnauth"));
 const App = lazy(() => import("./components/LayoutAuth"));
 const RootLayout = lazy(() => import("./components/RootLayout"));
@@ -130,12 +139,18 @@ const S = ({ children }: { children: ReactNode }) => (
 );
 
 const router = createBrowserRouter([
-  {
-    path: "/oauth",
-    element: <S children={<LayoutUnauth />} />,
-    errorElement: <RouterErrorElement />,
-    children: [{ path: "callback", element: <OAuthCallback />, id: "oauth-callback" }],
-  },
+  ...(OPEN_MERIDIAN
+    ? []
+    : [
+        {
+          path: "/oauth",
+          element: <S children={<LayoutUnauth />} />,
+          errorElement: <RouterErrorElement />,
+          children: [
+            { path: "callback", element: <OAuthCallback />, id: "oauth-callback" },
+          ],
+        },
+      ]),
   {
     path: "/",
     element: <S children={<RootLayout />} />,
@@ -150,22 +165,30 @@ const router = createBrowserRouter([
             element: <S children={<HomePage />} />,
             id: "home",
           },
-          {
-            path: "login",
-            element: <S children={<LoginPage />} />,
-            id: "login",
-          },
-          {
-            path: "reset-password",
-            element: <S children={<ResetPasswordPage />} />,
-            id: "reset-password",
-          },
+          ...(OPEN_MERIDIAN
+            ? []
+            : [
+                {
+                  path: "login",
+                  element: <S children={<LoginPage />} />,
+                  id: "login",
+                },
+                {
+                  path: "reset-password",
+                  element: <S children={<ResetPasswordPage />} />,
+                  id: "reset-password",
+                },
+              ]),
         ],
       },
-      {
-        path: "/2fa",
-        element: <S children={<Setup2FA />} />,
-      },
+      ...(OPEN_MERIDIAN
+        ? []
+        : [
+            {
+              path: "/2fa",
+              element: <S children={<Setup2FA />} />,
+            },
+          ]),
       {
         path: "/app",
         element: <AuthGuard />,
@@ -189,11 +212,15 @@ const router = createBrowserRouter([
             element: <S children={<DataConnectors />} />,
             id: "app-widgets",
           },
-          {
-            path: "ai",
-            element: <S children={<AILibrary />} />,
-            id: "app-ai",
-          },
+          ...(OPEN_MERIDIAN
+            ? []
+            : [
+                {
+                  path: "ai",
+                  element: <S children={<AILibrary />} />,
+                  id: "app-ai",
+                },
+              ]),
           {
             path: "settings",
             element: <S children={<Settings />} />,
@@ -211,53 +238,57 @@ const router = createBrowserRouter([
           },
         ],
       },
-      {
-        path: "/admin",
-        element: <S children={<LayoutAdmin />} />,
-        children: [
-          {
-            index: true,
-            element: <S children={<AdminHome />} />,
-            id: "admin-homepage",
-          },
-          {
-            path: "users",
-            element: <S children={<AdminUsers />} />,
-            id: "admin-users",
-          },
-          {
-            path: "entities",
-            element: <S children={<AdminEntities />} />,
-            id: "admin-entities",
-          },
-          {
-            path: "roles",
-            element: <S children={<AdminGroups />} />,
-            id: "admin-roles",
-          },
-          {
-            path: "widgets",
-            element: <S children={<AdminWidgets />} />,
-            id: "admin-widgets",
-          },
-          {
-            path: "apps",
-            element: <S children={<AdminApps />} />,
+      ...(OPEN_MERIDIAN
+        ? []
+        : [
+            {
+              path: "/admin",
+              element: <S children={<LayoutAdmin />} />,
+              children: [
+                {
+                  index: true,
+                  element: <S children={<AdminHome />} />,
+                  id: "admin-homepage",
+                },
+                {
+                  path: "users",
+                  element: <S children={<AdminUsers />} />,
+                  id: "admin-users",
+                },
+                {
+                  path: "entities",
+                  element: <S children={<AdminEntities />} />,
+                  id: "admin-entities",
+                },
+                {
+                  path: "roles",
+                  element: <S children={<AdminGroups />} />,
+                  id: "admin-roles",
+                },
+                {
+                  path: "widgets",
+                  element: <S children={<AdminWidgets />} />,
+                  id: "admin-widgets",
+                },
+                {
+                  path: "apps",
+                  element: <S children={<AdminApps />} />,
 
-            id: "admin-apps",
-          },
-          {
-            path: "theme-settings",
-            element: <S children={<AdminThemeSettings />} />,
-            id: "admin-theme-settings",
-          },
-          {
-            path: "account",
-            element: <S children={<AdminAccountSettings />} />,
-            id: "admin-account",
-          },
-        ],
-      },
+                  id: "admin-apps",
+                },
+                {
+                  path: "theme-settings",
+                  element: <S children={<AdminThemeSettings />} />,
+                  id: "admin-theme-settings",
+                },
+                {
+                  path: "account",
+                  element: <S children={<AdminAccountSettings />} />,
+                  id: "admin-account",
+                },
+              ],
+            },
+          ]),
     ],
   },
 ]);
