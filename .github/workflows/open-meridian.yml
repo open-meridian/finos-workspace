@@ -1,8 +1,9 @@
 # The Open Meridian plugin on this fork, job by job:
 # - checks: what we add held to its rules (upstream changes listed, names,
 #   licences, no route out), `meridian plugin check` with the plugin's tests;
-# - browser: the front end built as the image builds it, the licence scan of
-#   what it ships, and Workspace's own UI at 375, 582 and 1280 wide against a
+# - browser: the front end built as a person builds it (frontend.sh, in
+#   containers: no Node or Python of the runner's), the licence scan of what
+#   it ships, and Workspace's own UI at 375, 582 and 1280 wide against a
 #   stand-in sidecar, its requests recorded;
 # - deployment: a deployment from the released CLI and chart on k3d, with two
 #   dashboard copies and the platform-master stand-in; plugin-ecb and this
@@ -24,7 +25,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: "26.12.1"
   PYTHON_VERSION: "3.12"
   PLAYWRIGHT_VERSION: "1.65.2"
   # The released CLI and the chart its documentation describes (as
@@ -75,11 +75,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: { node-version: "${{ env.NODE_VERSION }}" }
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with: { python-version: "${{ env.PYTHON_VERSION }}" }
-      - name: The front end, as the image builds it, and the licence scan of what it ships
+      - name: The front end, built in containers as the README builds it, and the licence scan of what it ships
         run: open-meridian/ci/frontend.sh
       - name: A headless browser
         run: |
@@ -99,11 +97,9 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: { node-version: "${{ env.NODE_VERSION }}" }
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with: { python-version: "${{ env.PYTHON_VERSION }}" }
-      - name: The front end, as the image builds it
+      - name: The front end, built in containers as the README builds it
         run: open-meridian/ci/frontend.sh
       - name: A headless browser and the first run's hash
         run: |
