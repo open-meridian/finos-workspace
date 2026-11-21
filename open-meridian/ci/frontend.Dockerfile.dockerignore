@@ -1,0 +1,4 @@
+# What frontend.Dockerfile never takes from the repository's root: what a
+# build on this machine left in upstream's frontend/.
+frontend/node_modules
+frontend/dist
