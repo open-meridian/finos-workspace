@@ -1,14 +1,57 @@
-> **This is Open Meridian's fork of [FINOS Workspace](https://github.com/finos-labs/finos-workspace)**, showing FINOS Workspace working with
-> [Open Meridian](https://open-meridian.dev). Our changes are on this branch (`open-meridian`); the `main`
-> branch tracks upstream unchanged.
+> **This is Open Meridian's fork of [FINOS Workspace](https://github.com/finos-labs/finos-workspace)**, showing FINOS
+> Workspace working with [Open Meridian](https://open-meridian.dev). Our changes are on this branch
+> (`open-meridian`); the `main` branch tracks upstream unchanged.
 >
-> FINOS Workspace's front end, with its back end replaced by Open Meridian's data reads and access controls.
+> FINOS Workspace's front end runs as an Open Meridian plugin: its dashboards read the deployment's data, and the
+> deployment signs people in and decides who may open them. It is not listed in Open Meridian's plugin registry.
 >
-> **Status:** the integration isn't built yet. When it is, this section says how to run it locally against an Open
-> Meridian deployment. It isn't listed in Open Meridian's plugin registry.
->
-> FINOS Workspace is licensed under Apache-2.0; this fork keeps that licence and its notices. It is not affiliated with or
-> endorsed by FINOS or the Linux Foundation.
+> FINOS Workspace is licensed under Apache-2.0; this fork keeps that licence and its notices. It is not affiliated
+> with or endorsed by FINOS or the Linux Foundation.
+
+## Running it with Open Meridian
+
+What this branch adds is in [`open-meridian/`](open-meridian/): the plugin, its CI, and
+[`PROVENANCE.md`](open-meridian/PROVENANCE.md), which lists every upstream file it changes.
+
+The plugin serves Workspace's front end on its page in the deployment. Its widgets read the deployment's data
+through the plugin's sidecar, as the person who opened the page. It keeps nothing: a dashboard you change lasts
+while your page is open. Workspace's own sign-in, admin area, sharing and AI agent are not part of it.
+
+It offers one dashboard, **FX reference rates**: the latest FX reference rates as a table and a chart, with each
+rate's date, time and source; how recently each data source was heard; and a lookup of an instrument in the
+deployment's master by an identifier such as `EUR/USD`.
+
+### What you need
+
+- A local Open Meridian deployment, made with the `meridian` CLI (`meridian up`), and Docker.
+- A data plugin that records FX reference rates. [plugin-ecb](https://github.com/open-meridian/plugin-ecb) records
+  the European Central Bank's euro reference rates; it is public and needs no key.
+
+### Steps
+
+1. Build the front end into the plugin: `open-meridian/ci/frontend.sh`.
+2. Connect the CLI to your deployment (`meridian connect http://meridian.localhost`), then upload and launch both
+   plugins:
+
+   ```bash
+   meridian plugin upload --dir <plugin-ecb checkout>
+   meridian plugin upload --dir open-meridian/plugin
+   meridian plugin launch ecb <version> --instance ecb
+   meridian plugin launch workspace 0.1.0 --instance workspace
+   ```
+
+3. As a deployment admin, on **Data sources**: license `ecb:ecb_fx` and entitle `workspace` to it.
+4. Give yourself View or Open on `workspace`, then open it from the dashboard's home page and choose
+   **FX reference rates** on its Apps page.
+
+The workspace works at widths from 375 px.
+
+### How it is checked
+
+The CI job in [`.github/workflows/open-meridian.yml`](.github/workflows/open-meridian.yml) follows these steps on a
+fresh local deployment from the released CLI and chart, then checks in a headless browser that the dashboard shows
+the latest EUR/USD with its time, that the page asks nothing of any other address, that a person without access is
+refused, and that a withdrawn entitlement shows as a refusal rather than an empty table.
 
 [![badge-labs](https://user-images.githubusercontent.com/327285/230928932-7c75f8ed-e57b-41db-9fb7-a292a13a1e58.svg)](https://community.finos.org/docs/governance/lifecycle-stages/labs)
 
