@@ -26,6 +26,8 @@ RUN VITE_OPEN_MERIDIAN=true node node_modules/vite/bin/vite.js build --mode runt
 # What the build leaves out is not in the image: no chunk of those pages.
 RUN left=$(ls dist | grep -E '^(login|resetPassword|2fa|aiLibrary|LayoutAdmin)\.' || true); \
     if [ -n "$left" ]; then echo "frontend: the build still carries $left" >&2; exit 1; fi
+# The notices open with upstream's own licence and notice, at the root.
+COPY LICENSE NOTICE /src/
 COPY open-meridian/ci/notices.mjs /src/open-meridian/ci/notices.mjs
 RUN node /src/open-meridian/ci/notices.mjs /src/frontend dist/NOTICES.txt
 
