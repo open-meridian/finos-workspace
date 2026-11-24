@@ -3,8 +3,9 @@
 #   licences, no route out), `meridian plugin check` with the plugin's tests;
 # - browser: the front end built as a person builds it (frontend.sh, in
 #   containers: no Node or Python of the runner's), the licence scan of what
-#   it ships, and Workspace's own UI at 375, 582 and 1280 wide against a
-#   stand-in sidecar, its requests recorded;
+#   it ships, and Workspace's own UI (a dashboard, and its Apps, Connections
+#   and Widgets screens) at 375, 582 and 1280 wide against a stand-in
+#   sidecar, its requests recorded;
 # - deployment: a deployment from the released CLI and chart on k3d, with two
 #   dashboard copies and the platform-master stand-in; plugin-ecb and this
 #   plugin uploaded and launched; then the e2e in a headless browser.
@@ -83,10 +84,13 @@ jobs:
         run: |
           python -m pip install -e open-meridian/plugin pytest==8.4.2 "playwright==${PLAYWRIGHT_VERSION}"
           python -m playwright install --with-deps chromium
-      - name: Workspace's UI at 375, 582 and 1280 wide, its requests recorded
+      - name: Workspace's UI at 375, 582 and 1280 wide, each screen its sidebar leads to, its requests recorded
         working-directory: open-meridian/plugin
         env:
           BROWSER_SHOTS: ${{ runner.temp }}/browser-shots
+          # A front end not built, or no Playwright, fails this run rather
+          # than skipping the check.
+          BROWSER_REQUIRED: "1"
         run: python -m pytest -q tests/test_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
