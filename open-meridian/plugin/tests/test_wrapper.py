@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+from decimal import Decimal
 import sys
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from standin import DATASET, Sidecar  # noqa: E402
 
 from workspace import api, widgets  # noqa: E402
 from workspace.lake import Lake  # noqa: E402
-from workspace.pages import CSP, pages, use  # noqa: E402
+from workspace.pages import CSP, SERVED, pages, use  # noqa: E402
 
 
 #: The whole subset: what the front end calls at start and on the dashboard
@@ -258,3 +259,63 @@ def test_the_runtime_config_turns_off_every_agent_surface_and_names_the_page() -
     assert config["authentication"] == {"allowEmailLogin": False, "identityProviders": [], "sendUserEmailAsHeader": False}
     assert config["whiteLabel"]["name"] == "Open Meridian workspace"
     assert config["urls"] == {"backend": "/api", "ai": ""}
+
+
+#: Each read the Workspace page shows, by its widget, and the read tool that
+#: answers the same on the deployment's MCP surface.
+PARITY = {
+    "fx_rates_table": "read_fx_rates",
+    "fx_rates_chart": "read_fx_rates",
+    "dataset_ages": "read_dataset_ages",
+    "instrument_lookup": "read_instrument",
+}
+
+
+def test_every_read_the_page_shows_has_its_read_tool_at_the_same_levels() -> None:
+    assert set(PARITY) == set(widgets.WIDGETS)
+    tools = {tool.name: tool for tool in pages.tools}
+    for name in set(PARITY.values()):
+        tool = tools[name]
+        assert tool.reads and tool.method == "GET", name
+        assert set(tool.levels) == set(SERVED), name
+
+
+def test_each_read_tool_answers_what_its_widget_shows() -> None:
+    c, _ = client()
+    for level in ("write", "read"):
+        rates = c.call_tool("read_fx_rates", level=level)
+        assert rates.status == 200 and rates.outcome == "unchanged"
+        shown = json.loads(widget(c, "fx_rates_table", "&raw=true").body)
+        # The widget's rows carry a rate as a JSON number, as Workspace reads
+        # it; the tool's as a decimal string, as every tool answers one.
+        assert [{**r, "rate": Decimal(r["rate"])} for r in rates.data["rates"]] == [
+            {**r, "rate": Decimal(str(r["rate"]))} for r in shown
+        ]
+        ages = c.call_tool("read_dataset_ages", level=level).data["datasets"]
+        shown = json.loads(widget(c, "dataset_ages", "&raw=true").body)
+        assert [a["dataset"] for a in ages] == [s["dataset"] for s in shown] == [DATASET]
+        found = c.call_tool("read_instrument", {"query": "EUR/USD"}, level=level).data["found"]
+        listed = json.loads(widget(c, "instrument_lookup", "&query=EUR%2FUSD&raw=true").body)
+        assert [(f["instrument_id"], ", ".join(f["identifiers"])) for f in found] == [
+            (each["instrument_id"], each["identifiers"]) for each in listed
+        ] == [("INS-EUR", "iso4217:EUR"), ("INS-USD", "iso4217:USD")]
+
+
+def test_a_read_tool_is_refused_as_its_widget_is() -> None:
+    c, _ = client(Sidecar(entitled=False, listed=False))
+    refused = c.call_tool("read_fx_rates")
+    assert refused.status == 422 and "not entitled to any dataset" in refused.json["detail"]
+    assert c.call_tool("read_instrument", {}).status == 422
+
+
+def test_the_read_tools_are_not_served_under_manage() -> None:
+    c, _ = client()
+    for path in ("/tools/fx-rates", "/tools/dataset-ages", "/tools/instrument?query=EUR"):
+        assert call(c, "GET", path, level="admin").status == 403, path
+
+
+def test_a_browser_reads_a_read_tool_as_a_page_of_the_same_rows() -> None:
+    c, _ = client()
+    page = c.get("/tools/fx-rates", "read").text
+    assert "EUR/USD" in page and "1.1225" in page and "<table" in page
+    assert "INS-USD" in c.get("/tools/instrument", "read", query="EUR/USD").text

@@ -21,6 +21,23 @@ each part of what we add comes from, and every upstream file we change.
 No code from any other reference project is used. There is no clean-room
 part in this branch.
 
+## Licences of what the plugin's image ships
+
+- Workspace's front end, built from upstream's `frontend/` (Apache-2.0), with
+  `NOTICES.txt` beside it in the image: upstream's `LICENSE` and `NOTICE`
+  first, then the licence and notice files of every package the build ships.
+  `open-meridian/ci/notices.mjs` writes it, and fails the build on a package
+  under the AGPL, the GPL or the SSPL, one whose licence is unstated or
+  `UNLICENSED`, or `dockview-enterprise`.
+- The wrapper's Python: the Open Meridian SDK (`open-meridian`, Apache-2.0)
+  and what it requires, each distribution's licence in its own metadata in
+  the image. `open-meridian/ci/python_licences.py` lists them in CI and
+  fails on the same licences.
+- Dockview: none of its packages is used, its MIT ones or any other.
+- Charts: no chart library is shipped. The rates chart is an SVG the plugin
+  draws itself (`open-meridian/plugin/src/workspace/widgets.py`), under this
+  fork's Apache-2.0.
+
 ## Upstream files we change
 
 Each change is the least the plugin needs, and builds the same as upstream

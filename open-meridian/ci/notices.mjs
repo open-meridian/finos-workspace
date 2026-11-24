@@ -1,7 +1,10 @@
 // The notices of every package the front end's build ships (frontend/package-lock.json's
 // entries that are not dev-only), with Workspace's own LICENSE and NOTICE first; and the
 // licence scan: a package under the AGPL, the GPL or the SSPL fails it, since this fork is
-// Apache-2.0 and its image is built from it. Usage: node notices.mjs FRONTEND_DIR OUT
+// Apache-2.0 and its image is built from it; so does one whose licence is unstated or
+// UNLICENSED, and any package of a proprietary edition named in NEVER (Dockview's
+// commercial edition: only its MIT packages may ever ship). Usage: node notices.mjs
+// FRONTEND_DIR OUT
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -9,6 +12,8 @@ const [frontend, out] = process.argv.slice(2);
 const root = path.dirname(path.resolve(frontend));
 const lock = JSON.parse(fs.readFileSync(path.join(frontend, 'package-lock.json'), 'utf8'));
 const REFUSED = /(^|[^L])(A?GPL|SSPL)/i;
+const UNSTATED = /^(UNKNOWN|UNLICENSED)$/i;
+const NEVER = new Set(['dockview-enterprise']);
 const parts = [
   'Notices of what this image ships of FINOS Workspace\'s front end',
   '',
@@ -27,7 +32,8 @@ for (const [where, entry] of Object.entries(lock.packages ?? {})) {
   const licence = String(entry.license ?? JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).license ?? 'UNKNOWN');
   // An SPDX choice (A OR B) is taken under an alternative that is not refused.
   const choices = licence.replace(/[()]/g, '').split(/\s+OR\s+/i);
-  if (choices.every((each) => REFUSED.test(each))) refused.push(`${name}@${entry.version}: ${licence}`);
+  if (NEVER.has(name)) refused.push(`${name}@${entry.version}: a proprietary edition this fork never ships`);
+  else if (choices.every((each) => REFUSED.test(each) || UNSTATED.test(each.trim()))) refused.push(`${name}@${entry.version}: ${licence}`);
   const texts = fs.readdirSync(dir).filter((f) => /^(licen[cs]e|copying|notice)/i.test(f));
   parts.push(`== ${name}@${entry.version} (${licence}) ==`);
   for (const file of texts) parts.push(fs.readFileSync(path.join(dir, file), 'utf8'));
@@ -38,4 +44,4 @@ if (refused.length) {
   process.exit(1);
 }
 fs.writeFileSync(out, parts.join('\n'));
-console.log(`notices: ${count} packages, none under the AGPL, the GPL or the SSPL`);
+console.log(`notices: ${count} packages, none under the AGPL, the GPL or the SSPL, none unlicensed, no proprietary edition`);

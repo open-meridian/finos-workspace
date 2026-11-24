@@ -7,6 +7,12 @@
 # 3. Licences: nothing we add carries an AGPL or GPL notice; the provenance file is there.
 # 4. No route out: the wrapper's code holds no HTTP client and no socket; it
 #    reaches only its sidecar, through the SDK.
+# 5. Product names: each name we publish things under -- the plugin's
+#    package (its image's name), its page's title and the name Workspace's
+#    tab shows, the workflow's name, the headings of the README's fork
+#    section and of the plugin's docs -- names no persona (a role a person
+#    holds, such as trader or PM) and no upstream trademark (FINOS,
+#    Dockview) as our product.
 set -euo pipefail
 failed=0
 fail() { echo "checks: $*" >&2; failed=1; }
@@ -39,5 +45,27 @@ if grep -RnE '^\s*(import|from) (urllib\.request|http\.client|socket|requests|ht
   fail "the wrapper imports an HTTP client or a socket: it reaches only its sidecar"
 fi
 
-[ "$failed" -eq 0 ] && echo "checks: upstream changes listed, names, licences and no route out hold"
+# 5. Product names.
+pages_py=open-meridian/plugin/src/workspace/pages.py
+published=(
+  "package: $(sed -n 's/^name = "\(.*\)"/\1/p' open-meridian/plugin/pyproject.toml)"
+  "page title: $(sed -n 's/^TITLE = "\(.*\)"/\1/p' "$pages_py")"
+  "tab name: $(sed -n 's/^WL_NAME = "\(.*\)"/\1/p' "$pages_py")"
+  "workflow: $(sed -n 's/^name: *//p' .github/workflows/open-meridian.yml)"
+)
+while IFS= read -r heading; do published+=("README heading: $heading"); done \
+  < <(awk '/^<h1|^\[!\[badge/ { exit } /^#+ / { print }' README.md)
+while IFS= read -r heading; do published+=("docs heading: $heading"); done \
+  < <(grep -h '^#\+ ' open-meridian/plugin/docs/*.md)
+for each in "${published[@]}"; do
+  [ -n "${each#*: }" ] || fail "a published name is empty: ${each%%:*}"
+  if grep -qiE '\b(traders?|researchers?|analysts?|quants?|portfolio managers?|PMs?|risk managers?|treasurers?)\b' <<<"${each#*: }"; then
+    fail "a persona names a product: $each"
+  fi
+  if grep -qiE '\b(FINOS|Dockview)\b' <<<"${each#*: }"; then
+    fail "an upstream trademark names our product: $each"
+  fi
+done
+
+[ "$failed" -eq 0 ] && echo "checks: upstream changes listed, names, product names, licences and no route out hold"
 exit "$failed"

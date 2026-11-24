@@ -1,11 +1,13 @@
 """Workspace's own UI in a browser, on the wrapper with the stand-in
 sidecar (tests/dev.py): at 375, 582 and 1280 wide, no horizontal scroll;
-the starter dashboard shows EUR/USD; every request the page makes is to its
-own origin; and with the entitlement withdrawn the rates show the refusal.
+the starter dashboard shows EUR/USD; each screen its sidebar leads to (Apps,
+Connections, Widgets) fits too; every request the page makes is to its own
+origin; and with the entitlement withdrawn the rates show the refusal.
 
 Needs the front end built into web/ (open-meridian/ci/frontend.sh) and
-Playwright's Chromium; skipped without them. Screenshots go to
-$BROWSER_SHOTS when it is set.
+Playwright's Chromium; skipped without them, except where BROWSER_REQUIRED=1
+(the fork's CI), where either missing fails the run instead. Screenshots go
+to $BROWSER_SHOTS when it is set.
 """
 
 from __future__ import annotations
@@ -25,8 +27,17 @@ WIDTHS = (375, 582, 1280)
 #: The width this workspace is stated to work at, at the least (its docs).
 MINIMUM = 375
 
-playwright = pytest.importorskip("playwright.sync_api")
-pytestmark = pytest.mark.skipif(not (WEB / "index.html").is_file(), reason="the front end is not built")
+#: Workspace's own screens its sidebar leads to, besides a dashboard.
+SCREENS = ("/app", "/app/connections", "/app/widgets")
+
+if os.environ.get("BROWSER_REQUIRED") == "1":
+    import playwright.sync_api as playwright
+
+    if not (WEB / "index.html").is_file():
+        raise RuntimeError("the front end is not built into web/, and BROWSER_REQUIRED=1")
+else:
+    playwright = pytest.importorskip("playwright.sync_api")
+    pytestmark = pytest.mark.skipif(not (WEB / "index.html").is_file(), reason="the front end is not built")
 
 
 def free_port() -> int:
@@ -92,6 +103,35 @@ def test_the_starter_dashboard_at_each_width_reaches_only_its_own_origin() -> No
                 elsewhere = sorted({u for u in asked if not u.startswith(base) and not u.startswith(("data:", "blob:", "about:"))})
                 assert elsewhere == [], elsewhere
                 page.close()
+            browser.close()
+    finally:
+        process.kill()
+
+
+def test_each_of_its_own_screens_at_each_width_fits_and_reaches_only_its_own_origin() -> None:
+    process, base = serve(entitled=True)
+    shots = os.environ.get("BROWSER_SHOTS")
+    try:
+        with playwright.sync_playwright() as p:
+            browser = p.chromium.launch()
+            for width in WIDTHS:
+                for screen in SCREENS:
+                    page = browser.new_page(viewport={"width": width, "height": 900})
+                    asked: list[str] = []
+                    page.on("request", lambda r: asked.append(r.url))
+                    page.goto(base + screen)
+                    page.wait_for_load_state("load", timeout=30_000)
+                    page.wait_for_timeout(2000)
+                    assert "/login" not in page.url, f"{screen} at {width} sent to {page.url}"
+                    scroll = page.evaluate("document.documentElement.scrollWidth")
+                    assert scroll <= width, f"{screen}: {scroll}px wide at {width}"
+                    if shots:
+                        Path(shots).mkdir(parents=True, exist_ok=True)
+                        name = screen.strip("/").replace("/", "-")
+                        page.screenshot(path=f"{shots}/{name}-{width}.png")
+                    elsewhere = sorted({u for u in asked if not u.startswith(base) and not u.startswith(("data:", "blob:", "about:"))})
+                    assert elsewhere == [], (screen, width, elsewhere)
+                    page.close()
             browser.close()
     finally:
         process.kill()
