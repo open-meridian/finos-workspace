@@ -19,6 +19,12 @@ at one copy is refused at another until then. The run has two copies, and
 opens the workspace once the grant has held at the plugin's host for that
 long (`in_force`).
 
+A plugin's workload is available before the deployment knows the plugin:
+its sidecar reports once it has reached the broker, and until that first
+report an access group naming the workspace is refused. The run defines its
+access group once the deployment has heard from the workspace (`grant_view`,
+`FIRST_REPORT`).
+
 When a check fails, it says what the browser had: a screenshot, each frame's
 address and words, and the documents last answered (`tell`).
 
@@ -45,6 +51,16 @@ SHOTS = RUN / "shots"
 
 #: How often a dashboard copy reads the access records, in seconds.
 RECORDS_READ_EVERY = 30
+
+#: How long the workspace's first report is waited for, in seconds: its
+#: sidecar reports once it has reached the broker, which is after its
+#: workload is available. Until then the deployment does not know the
+#: workspace or its roles.
+FIRST_REPORT = 300
+
+#: What the deployment answers an access group naming a plugin it has not
+#: heard from yet.
+NOT_REPORTED = f"no plugin {INSTANCE} has reported"
 
 #: Each document a watched page's frames were answered, oldest first.
 DOCUMENTS: list[str] = []
@@ -118,8 +134,17 @@ def token(page: Page, path: str) -> str:
     return page.get_attribute("input[name=form_token]", "value", timeout=30_000) or ""
 
 
+def send(page: Page, path: str, fields: dict[str, str]):
+    """A form as a browser posts it. Returns the answer, unjudged."""
+    return page.request.post(f"{DASHBOARD}{path}", form=fields, max_redirects=0)
+
+
 def post(page: Page, path: str, fields: dict[str, str], what: str) -> None:
-    answer = page.request.post(f"{DASHBOARD}{path}", form=fields, max_redirects=0)
+    """A form posted (`send`), and its answer held to having been taken."""
+    taken(page, path, send(page, path, fields), what)
+
+
+def taken(page: Page, path: str, answer, what: str) -> None:
     if answer.status not in (200, 302, 303):
         said = re.sub(r"<[^>]+>", " ", answer.text())
         raise SystemExit(f"e2e: {what} answered {answer.status}: {' '.join(said.split())[:400]}")
@@ -151,15 +176,33 @@ def grant_view(page: Page) -> None:
     form = token(page, "/admin")
     post(page, "/admin/user-groups", {"form_token": form, "name": "Workspace readers", "login": "local|pat"},
          "a user group of pat")
-    post(page, "/admin/access-groups",
-         {"form_token": form, "name": "Workspace view", "entries": f"{INSTANCE} reporting read"},
-         "an access group, View on the workspace")
+    access(page)
     post(page, "/admin/permissions", {
         "form_token": form,
         "user_group_id": option(page, "user_group_id", "Workspace readers"),
         "account_group_id": "all-accounts",
         "access_group_id": option(page, "access_group_id", "Workspace view"),
     }, "the permission")
+
+
+def access(page: Page) -> None:
+    """The access group naming the workspace. While the deployment answers
+    that it does not know the workspace yet (`NOT_REPORTED`), the form is
+    posted again, a refused one having changed nothing, until the deployment
+    has heard from it, at most `FIRST_REPORT` seconds. Any other refusal
+    fails at once."""
+
+    def sent():
+        form = token(page, "/admin")
+        answer = send(page, "/admin/access-groups",
+                      {"form_token": form, "name": "Workspace view", "entries": f"{INSTANCE} reporting read"})
+        if answer.status == 400 and NOT_REPORTED in words(answer.text(), 4000):
+            say(f"Workspace view not defined yet: {NOT_REPORTED}")
+            return None
+        return answer
+
+    answer = until(f"the deployment hearing from {INSTANCE}", FIRST_REPORT, sent, every=2)
+    taken(page, "/admin/access-groups", answer, "an access group, View on the workspace")
 
 
 def license_and_entitle(page: Page) -> None:
