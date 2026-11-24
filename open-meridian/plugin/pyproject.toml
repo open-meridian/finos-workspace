@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "workspace"
-version = "0.1.0"
+version = "0.2.0"
 description = "FINOS Workspace's front end on an Open Meridian deployment, its widgets reading the lake"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"

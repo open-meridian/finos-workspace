@@ -1,0 +1,19 @@
+{#- A read tool's answer, for a browser: the same rows the Workspace page's
+    widget shows, in a plain table. -#}
+{% extends "meridian/base.html" %}
+{% block content %}
+<section class="panel">
+<h2>{{ heading }}</h2>
+{% if rows %}
+<table class="one-line">
+<thead><tr>{% for key, label in columns %}<th>{{ label }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for row in rows %}
+<tr>{% for key, label in columns %}<td>{{ row[key] }}</td>{% endfor %}</tr>
+{% endfor %}
+</tbody></table>
+{% else %}
+<p class="empty-state">{{ empty }}</p>
+{% endif %}
+</section>
+{% endblock %}

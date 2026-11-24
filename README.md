@@ -37,7 +37,7 @@ deployment's master by an identifier such as `EUR/USD`.
    meridian plugin upload --dir <plugin-ecb checkout>
    meridian plugin upload --dir open-meridian/plugin
    meridian plugin launch ecb <version> --instance ecb
-   meridian plugin launch workspace 0.1.0 --instance workspace
+   meridian plugin launch workspace 0.2.0 --instance workspace
    ```
 
 3. As a deployment admin, on **Data sources**: license `ecb:ecb_fx` and entitle `workspace` to it.

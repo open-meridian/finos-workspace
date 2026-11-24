@@ -10,6 +10,12 @@ Two tabs are declared, as every page is:
 - **Datasets** (`/datasets`), under Manage: the reporting role's common page,
   each dataset the plugin reads and whether it is entitled to it.
 
+Each read the Workspace page shows is also a read tool on the deployment's
+MCP surface, under the same levels (Open and View): `read_fx_rates` (the
+rates table and chart), `read_dataset_ages` (the dataset ages) and
+`read_instrument` (the instrument lookup). Each reads what its widget reads,
+through the same role class, and is refused as its widget is.
+
 Who is asking is the `Meridian-Caller` header the sidecar forwarded, every
 time. Nothing here sets a cookie or keeps a session. A request that changes
 something (any method but GET and HEAD) must carry `X-Workspace-Client: web`,
@@ -26,6 +32,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import meridian
@@ -33,7 +40,7 @@ from meridian.roles import reporting
 from meridian.v1 import sidecar_pb2
 
 from . import api
-from .lake import Lake
+from .lake import Age, Found, Lake, Rate, Refused, now_ns
 
 log = logging.getLogger("workspace")
 
@@ -154,7 +161,8 @@ class Workspace(meridian.Pages):
         return answer
 
     def _declared_paths(self) -> set[tuple[str, str]]:
-        return {(page.path, "GET") for page in self.declared}
+        tabs = {(page.path, "GET") for page in self.declared}
+        return tabs | {(tool.path, tool.method) for tool in self.tools}
 
     async def _serve(self, request: meridian.Request, method: str) -> meridian.Response:
         path = request.path
@@ -237,3 +245,117 @@ async def datasets(request: meridian.Request) -> meridian.Response:
         ]
     )
     return pages.answer("datasets.html", said)
+
+
+#: The read tools' paths: under none of the front end's own.
+TOOLS = "/tools"
+
+#: The levels the front end is served under, which its reads' tools serve.
+READ_LEVELS = ["write", "read"]
+
+
+@dataclass(frozen=True)
+class RatesRead:
+    """The latest reference rates, as the rates table and chart show them."""
+
+    rates: list[Rate] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class AgesRead:
+    """Each dataset this plugin may read, as the dataset ages widget shows it."""
+
+    datasets: list[Age] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class LookupAsked:
+    """What the instrument lookup is asked."""
+
+    query: str = field(
+        metadata={
+            "description": "An ISO 4217 code or a pair of them (EUR/USD), a FIGI, an ISIN, "
+            "a ticker, or an instrument's ID",
+            "max_length": 64,
+        }
+    )
+
+
+@dataclass(frozen=True)
+class LookupRead:
+    """The master's records for what was asked, as the lookup widget shows them."""
+
+    found: list[Found] = field(default_factory=list)
+
+
+def _rows(records: list) -> list[dict]:
+    return [{key: ("" if value is None else value) for key, value in asdict(each).items()} for each in records]
+
+
+@pages.route(f"{TOOLS}/fx-rates", levels=READ_LEVELS, answers=RatesRead, name="read_fx_rates")
+async def read_fx_rates(request: meridian.Request) -> meridian.Response:
+    """The latest reference rate of the euro in each currency the lake holds,
+    with its business date, its time and the dataset it came from: what the
+    Workspace page's rates table and chart show."""
+    try:
+        rates = await pages.lake.rates()
+    except Refused as why:
+        pages.refuse(str(why), reason="declined")
+    columns = [
+        ("pair", "Pair"),
+        ("rate", "Rate"),
+        ("business_date", "Business date"),
+        ("valid_from", "Time"),
+        ("dataset", "Source"),
+    ]
+    return pages.answer(
+        "read.html", RatesRead(rates=rates), heading="Latest FX reference rates",
+        columns=columns, rows=_rows(rates), empty="The lake holds no reference rate yet.",
+    )
+
+
+@pages.route(f"{TOOLS}/dataset-ages", levels=READ_LEVELS, answers=AgesRead, name="read_dataset_ages")
+async def read_dataset_ages(request: meridian.Request) -> meridian.Response:
+    """Each dataset this plugin may read: whether it is entitled, when its
+    source was last heard and how long ago, as the Workspace page's dataset
+    ages widget shows it."""
+    ages = await pages.lake.ages(now_ns())
+    columns = [
+        ("dataset", "Dataset"),
+        ("vendor", "Vendor"),
+        ("entitled", "Entitled"),
+        ("alive_at", "Last heard"),
+        ("age_seconds", "Age (s)"),
+    ]
+    return pages.answer(
+        "read.html", AgesRead(datasets=ages), heading="Dataset ages",
+        columns=columns, rows=_rows(ages), empty="This workspace is not entitled to any dataset yet.",
+    )
+
+
+@pages.route(
+    f"{TOOLS}/instrument",
+    levels=READ_LEVELS,
+    params=LookupAsked,
+    answers=LookupRead,
+    name="read_instrument",
+)
+async def read_instrument(request: meridian.Request) -> meridian.Response:
+    """The deployment's master records for an identifier, as the Workspace
+    page's instrument lookup shows them."""
+    asked = request.params.query if request.params is not None else ""
+    try:
+        found = await pages.lake.lookup(asked)
+    except Refused as why:
+        pages.refuse(str(why), reason="declined")
+    columns = [
+        ("asked", "Asked"),
+        ("instrument_id", "Instrument"),
+        ("description", "Description"),
+        ("asset_class", "Asset class"),
+        ("currency", "Currency"),
+    ]
+    return pages.answer(
+        "read.html", LookupRead(found=found), heading="Instrument lookup",
+        columns=columns, rows=_rows(found), empty=f"The master holds no instrument for {asked!r}.",
+    )
